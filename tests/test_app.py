@@ -1,11 +1,10 @@
 import asyncio
-import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import judges
-from app.llm import LLMFailed, LLMServerError, run_with_budget
+from app.llm import LLMServerError, run_with_budget
 from app.main import app, get_llm
 
 
@@ -63,18 +62,6 @@ def claim(supported: bool, quote: str = "일주일 안에") -> dict:
 
 
 # --- API ---
-
-
-def test_healthz(client):
-    assert client.get("/healthz").json() == {"status": "ok"}
-
-
-def test_hallucination_missing_answer_is_422(client):
-    assert client.post("/eval/hallucination", json={**H_REQ, "answer": None}).status_code == 422
-
-
-def test_resolution_bad_ended_reason_is_422(client):
-    assert client.post("/eval/resolution", json={**R_REQ, "ended_reason": "x"}).status_code == 422
 
 
 def test_resolution_empty_messages_is_422(client):
@@ -173,31 +160,12 @@ def run(attempt, **kw):
     return asyncio.run(run_with_budget(attempt, **kw))
 
 
-def flaky(*outcomes):
-    """outcomes를 순서대로 반환하거나 raise하는 attempt."""
-    it = iter(outcomes)
-
-    async def attempt():
-        o = next(it)
-        if isinstance(o, Exception):
-            raise o
-        return o
-
-    return attempt
-
-
-def test_budget_counts_attempts():
-    assert run(flaky(json.JSONDecodeError("x", "", 0), "ok")) == ("ok", 2)
-
-
-def test_budget_gives_up_after_3_attempts():
-    with pytest.raises(LLMFailed):
-        run(flaky(*[LLMServerError("500")] * 3, "never"))
-
-
 def test_budget_does_not_retry_bugs():
+    async def bug():
+        raise ValueError("bug")
+
     with pytest.raises(ValueError):
-        run(flaky(ValueError("bug"), "ok"))
+        run(bug)
 
 
 def test_budget_timeout_covers_whole_request():

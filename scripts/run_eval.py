@@ -74,10 +74,9 @@ async def main() -> None:
         "|---|---|---|---|---|",
         *(f"| {c['id']} | {c['label']} | {p} | {w} | {c['note']} |" for c, p, w in wrong),
     ]
-    out = ROOT / "reports" / f"{data.stem}_report.md"
-    out.parent.mkdir(exist_ok=True)
-    out.write_text("\n".join(report) + "\n", encoding="utf-8")
-    print(out.read_text(encoding="utf-8"))
+    text = "\n".join(report) + "\n"
+    (ROOT / "reports" / f"{data.stem}_report.md").write_text(text, encoding="utf-8")
+    print(text)
 
 
 if __name__ == "__main__":
