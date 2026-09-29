@@ -28,7 +28,7 @@ AI 에이전트를 운영하려면 「답이 맞았는가」와 「문제가 해
     {"claim": "결제 후 7일 이내 환불 가능", "answer_quote": "결제 후 7일 이내 환불 가능하고", "supported": true, "evidence_id": "doc1", "reason": "..."},
     {"claim": "환불 수수료 없음", "answer_quote": "수수료는 없습니다", "supported": false, "evidence_id": null, "reason": "근거에 언급 없음"}
   ],
-  "model": "gpt-6-luna", "prompt_version": "hallucination_v2", "latency_ms": 2210
+  "model": "gpt-6-luna", "prompt_version": "hallucination_v3", "latency_ms": 2210
 }
 ```
 
@@ -45,7 +45,7 @@ AI 에이전트를 운영하려면 「답이 맞았는가」와 「문제가 해
   "ended_reason": "user_closed"          // user_closed | timeout
 }
 // response
-{"status": "resolved", "confidence": 0.9, "reason": "...", "model": "gpt-6-luna", "prompt_version": "resolution_v3", "latency_ms": 1950}
+{"status": "resolved", "confidence": 0.9, "reason": "...", "model": "gpt-6-luna", "prompt_version": "resolution_v4", "latency_ms": 1950}
 // status: resolved | unresolved | needs_review | escalation_needed
 ```
 
@@ -66,7 +66,7 @@ uv sync
 uv run --env-file .env uvicorn app.main:app --reload     # http://localhost:8000/docs
 uv run pytest                                             # 네트워크를 쓰지 않는다 (FakeLLM)
 uv run --env-file .env python -m scripts.run_eval        # reports/eval_set_report.md 생성
-uv run --env-file .env python -m scripts.run_eval data/holdout_set.jsonl  # held-out
+uv run --env-file .env python -m scripts.run_eval data/holdout2_set.jsonl # held-out
 ```
 
 환경변수 (`.env`에 넣고 `--env-file .env`로 읽는다):
@@ -95,7 +95,8 @@ docker run -p 8000:8000 --env-file .env aichat-eval
 | resolution_v3 | 9/10 | 9/10 | LLM은 관찰값 4개만 답하고, 상태는 코드가 우선순위대로 결정 |
 | hallucination_v2 + resolution_v3 | 9/10 | 9/10 | 주장마다 답변 원문 인용(`answer_quote`)을 받고 코드가 원문에 있는지 검증 |
 | 같은 프롬프트, r11 추가 | 9/10 | 10/11 | 수동 테스트에서 찾은 경계 케이스 추가 (아래 참고) |
-| 모델 교체: gpt-6-luna (현재) | 10/10 | 11/11 | 프롬프트는 그대로, 모델만 교체 (아래 참고) |
+| 모델 교체: gpt-6-luna | 10/10 | 11/11 | 프롬프트는 그대로, 모델만 교체 (아래 참고) |
+| v4: hallucination_v3 + resolution_v4 (현재) | 10/10 | 11/11 | held-out 1차에서 찾은 두 문제 수정 (아래 참고) |
 
 - **v1**: r05·r08이 틀렸습니다. 「감사합니다」나 timeout 같은 신호 하나만 보고 resolved로 판정했습니다. 우선순위 규칙을 적용하지 못했습니다.
 - **v2**: 판정 순서를 글로 적어 줬지만 오히려 나빠졌습니다. 같은 실수에 r04가 더해졌습니다. 규칙을 문장으로 설명하는 것만으로는 모델이 그 규칙을 지키지 않았습니다.
@@ -105,7 +106,7 @@ docker run -p 8000:8000 --env-file .env aichat-eval
 - **모델 교체**: gpt-4o-mini($0.15/$0.60 per 1M 토큰)에서 gpt-6-luna($0.10/$0.50)로 바꿨습니다. 같은 프롬프트로 gpt-4o-mini가 틀리던 h09(근거의 조건 「미개봉」 누락)와 r04(「확인 후 안내드리겠습니다」를 답으로 판정)를 맞혔습니다. 3회 실행해 모두 21/21이었습니다. 평가셋 1회 비용은 약 $0.0035에서 $0.0028로 줄었고, 건당 응답 시간은 1.5초에서 약 2.3초로 늘었습니다. 10초 한도 안입니다.
 - **21/21의 의미**: 이 평가셋은 모델 교체 전에 이미 틀린 케이스를 보고 다듬은 것이라, 만점은 「이 21건에서 틀린 게 없다」는 뜻일 뿐입니다. 새 케이스를 추가해 계속 검증해야 합니다.
 
-### held-out 검증 (10건)
+### held-out 1차 (v3 검증, 10건)
 
 위 개선은 모두 21건 평가셋의 틀린 케이스를 보고 한 것이라 낙관적입니다. 그래서 프롬프트 수정에 한 번도 쓰지 않은 10건([data/holdout_set.jsonl](data/holdout_set.jsonl))을 새로 만들었습니다. 입력을 먼저 쓰고, 모델 결과를 보기 전에 라벨을 확정했습니다. 결과를 본 뒤에는 코드와 프롬프트를 고치지 않았습니다.
 
@@ -118,7 +119,25 @@ docker run -p 8000:8000 --env-file .env aichat-eval
 - **temperature 0이어도 결과가 흔들립니다.** hh2(「30일」→「한 달」)와 hh5(「확인해 보겠습니다」)는 실행마다 맞고 틀림이 바뀌었습니다. 둘 다 판단이 갈리는 경계 케이스입니다. hh5는 정의 자체도 모호합니다. 「확인해 보겠습니다」를 약속(판정 대상)으로 볼지, 사실이 없는 문장(`no_claims`)으로 볼지 정의가 가르지 못합니다.
 - **hr5는 코드 로직의 구멍입니다.** 인사만 하고 질문 없이 timeout으로 끝난 대화입니다. LLM은 「답하지 못한 질문이 없다」며 `answered=true`로 답하고, 코드는 「답했고 봇의 말로 timeout」이니 resolved로 계산합니다. 질문이 없는 대화가 해결률에 들어갑니다. 고치려면 「고객 질문이 있었는가」라는 관찰값을 하나 더 받아야 합니다. held-out 결과를 보고 고치면 이 10건이 더 이상 held-out이 아니므로, 고친 뒤에는 새 held-out이 필요합니다.
 
-상세 결과(혼동행렬, 틀린 케이스)는 [reports/eval_set_report.md](reports/eval_set_report.md)(평가셋, 현재), [reports/holdout_set_report.md](reports/holdout_set_report.md)(held-out, 2회차), [reports/eval_report_v1.md](reports/eval_report_v1.md)(기준선)에 있습니다. v1·v2 프롬프트는 v3 이전의 출력 스키마(`status`를 LLM이 직접 반환)를 전제로 합니다.
+### v4: held-out 1차에서 찾은 문제 수정
+
+- **hr5 (질문 없는 대화)**: LLM 관찰값에 `has_question`(고객이 질문이나 요청을 했는가)을 추가했습니다. 코드는 질문이 있었을 때만 resolved를 줍니다.
+- **hh5 (진행 멘트)**: 정의를 정했습니다. 「확인해 보겠습니다」, 「잠시만 기다려 주세요」 같은 진행 멘트는 약속이 아니라 `no_claims`로 봅니다. 고객이 받을 결과(환불·취소·금액·기간)를 약속할 때만 약속으로 판정합니다.
+- 평가셋 21건은 그대로 21/21입니다. held-out 1차는 수정에 썼으므로 더 이상 held-out이 아닙니다. 참고로 다시 돌리면 hh5와 hr5는 맞고, 대신 hr3(배송지 변경을 권한 밖 요청으로 해석)이 틀리고 hh2는 여전히 흔들려 8/10입니다. 여기서 다시 고치지 않았습니다.
+
+### held-out 2차 (v4 검증, 10건)
+
+v4를 검증하려고 새로 10건([data/holdout2_set.jsonl](data/holdout2_set.jsonl))을 만들었습니다. 1차와 같은 절차로 결과를 보기 전에 라벨을 확정했고, 결과를 본 뒤에는 고치지 않았습니다.
+
+| 실행 | hallucination | resolution | 틀린 케이스 |
+|---|---|---|---|
+| 1회 | 5/5 | 4/5 | h2b5 |
+| 2회 | 5/5 | 4/5 | h2b5 |
+
+- **v4에서 고친 두 규칙은 새 케이스에서도 맞았습니다.** h2a4(진행 멘트 → `no_claims`)와 h2b1(질문 없는 대화 → `unresolved`)이 두 번 모두 맞았습니다.
+- **h2b5는 라벨과 정의의 충돌입니다.** 고객이 「계정을 가족 명의로 바꿀 수 있나요?」라고 묻자 봇이 셀프 처리 방법을 안내했고 고객이 수용했습니다. 라벨은 `resolved`입니다. 그런데 프롬프트의 정의가 「명의 변경」을 권한 밖 요청의 예시로 들고 있어서, 모델은 정의대로 `escalation_needed`를 냈습니다. 1차의 hr4(예외 환불)에서도 같은 종류의 충돌이 있었습니다. escalation 정의가 너무 넓다는 신호입니다. 「권한 밖 요청」을 「봇이 처리 방법을 줄 수 없는 요청」으로 좁히는 것이 다음 개선 후보이고, 그러면 다시 새 held-out이 필요합니다.
+
+상세 결과(혼동행렬, 틀린 케이스)는 [reports/eval_set_report.md](reports/eval_set_report.md)(평가셋), [reports/holdout_set_report.md](reports/holdout_set_report.md)(held-out 1차, v4로 재실행), [reports/holdout2_set_report.md](reports/holdout2_set_report.md)(held-out 2차), [reports/eval_report_v1.md](reports/eval_report_v1.md)(기준선)에 있습니다. v1·v2 프롬프트는 v3 이전의 출력 스키마(`status`를 LLM이 직접 반환)를 전제로 합니다.
 
 ## 설계 결정
 

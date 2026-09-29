@@ -2,8 +2,8 @@
 
 - 날짜: 2026-09-29
 - 모델: gpt-6-luna
-- 프롬프트: hallucination_v2, resolution_v3
-- 평가셋: data/eval_set.jsonl 21건 (자체 라벨. 일반화된 정확도가 아니다)
+- 프롬프트: hallucination_v3, resolution_v4
+- 평가셋: eval_set.jsonl 21건 (자체 라벨. 일반화된 정확도가 아니다)
 
 ## hallucination — 10/10 (100%)
 

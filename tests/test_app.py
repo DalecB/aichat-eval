@@ -85,7 +85,7 @@ def test_all_claims_supported_is_grounded(client, fake):
     fake.responses.append({"claims": [claim(True), claim(True)]})
     body = client.post("/eval/hallucination", json=H_REQ).json()
     assert (body["verdict"], body["score"]) == ("grounded", 1.0)
-    assert (body["model"], body["prompt_version"]) == ("fake", "hallucination_v2")
+    assert (body["model"], body["prompt_version"]) == ("fake", "hallucination_v3")
     assert isinstance(body["latency_ms"], int)
 
 
@@ -113,8 +113,9 @@ def test_empty_context_skips_llm(client, fake):
     assert fake.calls == 0
 
 
-def signals(escalation=False, repeated=False, answered=True, accepted=False) -> dict:
+def signals(escalation=False, repeated=False, answered=True, accepted=False, question=True) -> dict:
     return {
+        "has_question": question,
         "escalation": escalation,
         "repeated_question": repeated,
         "answered": answered,
@@ -137,12 +138,13 @@ def signals(escalation=False, repeated=False, answered=True, accepted=False) -> 
         (signals(), "timeout", "resolved"),  # 봇의 완결된 답으로 끝나고 timeout
         (signals(), "user_closed", "unresolved"),  # 답은 했지만 수용 신호 없이 고객이 닫음
         (signals(answered=False, accepted=True), "user_closed", "unresolved"),  # 답 없이 감사 인사
+        (signals(question=False), "timeout", "unresolved"),  # 인사만 하고 timeout
     ],
 )
 def test_resolution_status_priority(client, fake, sig, ended_reason, expected):
     fake.responses.append(sig)
     body = client.post("/eval/resolution", json={**R_REQ, "ended_reason": ended_reason}).json()
-    assert (body["status"], body["prompt_version"]) == (expected, "resolution_v3")
+    assert (body["status"], body["prompt_version"]) == (expected, "resolution_v4")
 
 
 def test_schema_error_and_5xx_are_retried(client, fake):

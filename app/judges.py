@@ -14,8 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from app.llm import LLMClient
 
-HALLUCINATION_PROMPT = "hallucination_v2"
-RESOLUTION_PROMPT = "resolution_v3"
+HALLUCINATION_PROMPT = "hallucination_v3"
+RESOLUTION_PROMPT = "resolution_v4"
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
@@ -120,6 +120,7 @@ class ResolutionSignals(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    has_question: bool  # 고객이 질문이나 요청을 했다
     escalation: bool  # 봇이 답을 못 한다고 인정 / 권한 밖 요청 / 상담원 요청
     repeated_question: bool  # 같은 취지의 질문을 2회 이상
     answered: bool  # 고객의 질문에 봇이 완결된 답을 했다 (마지막 질문 포함)
@@ -154,7 +155,7 @@ async def judge_resolution(req: ResolutionRequest, llm: LLMClient) -> Resolution
         status = "escalation_needed"
     elif s.repeated_question:
         status = "needs_review"
-    elif s.answered and (s.accepted or bot_ended_by_timeout):
+    elif s.has_question and s.answered and (s.accepted or bot_ended_by_timeout):
         status = "resolved"
     else:
         status = "unresolved"
