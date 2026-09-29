@@ -65,7 +65,8 @@ AI 에이전트를 운영하려면 「답이 맞았는가」와 「문제가 해
 uv sync
 uv run --env-file .env uvicorn app.main:app --reload     # http://localhost:8000/docs
 uv run pytest                                             # 네트워크를 쓰지 않는다 (FakeLLM)
-uv run --env-file .env python -m scripts.run_eval        # reports/eval_report.md 생성
+uv run --env-file .env python -m scripts.run_eval        # reports/eval_set_report.md 생성
+uv run --env-file .env python -m scripts.run_eval data/holdout_set.jsonl  # held-out
 ```
 
 환경변수 (`.env`에 넣고 `--env-file .env`로 읽는다):
@@ -104,7 +105,20 @@ docker run -p 8000:8000 --env-file .env aichat-eval
 - **모델 교체**: gpt-4o-mini($0.15/$0.60 per 1M 토큰)에서 gpt-6-luna($0.10/$0.50)로 바꿨습니다. 같은 프롬프트로 gpt-4o-mini가 틀리던 h09(근거의 조건 「미개봉」 누락)와 r04(「확인 후 안내드리겠습니다」를 답으로 판정)를 맞혔습니다. 3회 실행해 모두 21/21이었습니다. 평가셋 1회 비용은 약 $0.0035에서 $0.0028로 줄었고, 건당 응답 시간은 1.5초에서 약 2.3초로 늘었습니다. 10초 한도 안입니다.
 - **21/21의 의미**: 이 평가셋은 모델 교체 전에 이미 틀린 케이스를 보고 다듬은 것이라, 만점은 「이 21건에서 틀린 게 없다」는 뜻일 뿐입니다. 새 케이스를 추가해 계속 검증해야 합니다.
 
-상세 결과(혼동행렬, 틀린 케이스)는 [reports/eval_report.md](reports/eval_report.md)(현재)와 [reports/eval_report_v1.md](reports/eval_report_v1.md)(기준선)에 있습니다. v1·v2 프롬프트는 v3 이전의 출력 스키마(`status`를 LLM이 직접 반환)를 전제로 합니다.
+### held-out 검증 (10건)
+
+위 개선은 모두 21건 평가셋의 틀린 케이스를 보고 한 것이라 낙관적입니다. 그래서 프롬프트 수정에 한 번도 쓰지 않은 10건([data/holdout_set.jsonl](data/holdout_set.jsonl))을 새로 만들었습니다. 입력을 먼저 쓰고, 모델 결과를 보기 전에 라벨을 확정했습니다. 결과를 본 뒤에는 코드와 프롬프트를 고치지 않았습니다.
+
+| 실행 | hallucination | resolution | 틀린 케이스 |
+|---|---|---|---|
+| 1회 | 4/5 | 4/5 | hh5, hr5 |
+| 2회 | 4/5 | 4/5 | hh2, hr5 |
+
+- **평가셋 21/21 → held-out 8/10.** 튜닝에 쓴 케이스로 잰 정확도가 실제보다 높게 나온다는 것을 확인했습니다.
+- **temperature 0이어도 결과가 흔들립니다.** hh2(「30일」→「한 달」)와 hh5(「확인해 보겠습니다」)는 실행마다 맞고 틀림이 바뀌었습니다. 둘 다 판단이 갈리는 경계 케이스입니다. hh5는 정의 자체도 모호합니다. 「확인해 보겠습니다」를 약속(판정 대상)으로 볼지, 사실이 없는 문장(`no_claims`)으로 볼지 정의가 가르지 못합니다.
+- **hr5는 코드 로직의 구멍입니다.** 인사만 하고 질문 없이 timeout으로 끝난 대화입니다. LLM은 「답하지 못한 질문이 없다」며 `answered=true`로 답하고, 코드는 「답했고 봇의 말로 timeout」이니 resolved로 계산합니다. 질문이 없는 대화가 해결률에 들어갑니다. 고치려면 「고객 질문이 있었는가」라는 관찰값을 하나 더 받아야 합니다. held-out 결과를 보고 고치면 이 10건이 더 이상 held-out이 아니므로, 고친 뒤에는 새 held-out이 필요합니다.
+
+상세 결과(혼동행렬, 틀린 케이스)는 [reports/eval_set_report.md](reports/eval_set_report.md)(평가셋, 현재), [reports/holdout_set_report.md](reports/holdout_set_report.md)(held-out, 2회차), [reports/eval_report_v1.md](reports/eval_report_v1.md)(기준선)에 있습니다. v1·v2 프롬프트는 v3 이전의 출력 스키마(`status`를 LLM이 직접 반환)를 전제로 합니다.
 
 ## 설계 결정
 

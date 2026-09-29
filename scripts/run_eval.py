@@ -1,10 +1,12 @@
-"""평가셋으로 judge 정확도를 측정해 reports/eval_report.md를 만든다.
+"""평가셋으로 judge 정확도를 측정해 reports/<평가셋 이름>_report.md를 만든다.
 
-uv run --env-file .env python -m scripts.run_eval
+uv run --env-file .env python -m scripts.run_eval                        # data/eval_set.jsonl
+uv run --env-file .env python -m scripts.run_eval data/holdout_set.jsonl
 """
 
 import asyncio
 import json
+import sys
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -52,7 +54,8 @@ def section(task: str, rows: list[tuple[dict, str, str]]) -> str:
 
 async def main() -> None:
     llm = OpenAIClient()
-    cases = [json.loads(line) for line in (ROOT / "data/eval_set.jsonl").open(encoding="utf-8")]
+    data = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data/eval_set.jsonl"
+    cases = [json.loads(line) for line in data.open(encoding="utf-8")]
     rows = [(c, *await predict(c, llm)) for c in cases]  # 순차 실행. 건수가 늘면 gather로 병렬화
 
     wrong = [(c, pred, why) for c, pred, why in rows if c["label"] != pred]
@@ -62,7 +65,7 @@ async def main() -> None:
         f"- 날짜: {date.today()}",
         f"- 모델: {llm.model}",
         f"- 프롬프트: {judges.HALLUCINATION_PROMPT}, {judges.RESOLUTION_PROMPT}",
-        f"- 평가셋: data/eval_set.jsonl {len(cases)}건 (자체 라벨. 일반화된 정확도가 아니다)",
+        f"- 평가셋: {data.name} {len(cases)}건 (자체 라벨. 일반화된 정확도가 아니다)",
         "",
         *(section(t, [r for r in rows if r[0]["task"] == t]) + "\n" for t in TASKS),
         f"## 틀린 케이스 ({len(wrong)}건)",
@@ -71,7 +74,7 @@ async def main() -> None:
         "|---|---|---|---|---|",
         *(f"| {c['id']} | {c['label']} | {p} | {w} | {c['note']} |" for c, p, w in wrong),
     ]
-    out = ROOT / "reports/eval_report.md"
+    out = ROOT / "reports" / f"{data.stem}_report.md"
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(report) + "\n", encoding="utf-8")
     print(out.read_text(encoding="utf-8"))
