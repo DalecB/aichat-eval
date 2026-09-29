@@ -45,8 +45,13 @@ AI 에이전트를 운영하려면 「답이 맞았는가」와 「문제가 해
   "ended_reason": "user_closed"          // user_closed | timeout
 }
 // response
-{"status": "resolved", "confidence": 0.9, "reason": "...", "model": "gpt-6-luna", "prompt_version": "resolution_v4", "latency_ms": 1950}
-// status: resolved | unresolved | needs_review | escalation_needed
+{
+  "status": "resolved",                  // resolved | unresolved | needs_review | escalation_needed
+  "has_question": true, "escalation": false, "repeated_question": false,
+  "answered": true, "accepted": true,    // LLM 관찰값. status는 코드가 이 값으로 계산한다
+  "confidence": 0.9, "reason": "...",
+  "model": "gpt-6-luna", "prompt_version": "resolution_v4", "latency_ms": 1950
+}
 ```
 
 ### 에러

@@ -132,6 +132,7 @@ def test_resolution_status_priority(client, fake, sig, ended_reason, expected):
     fake.responses.append(sig)
     body = client.post("/eval/resolution", json={**R_REQ, "ended_reason": ended_reason}).json()
     assert (body["status"], body["prompt_version"]) == (expected, "resolution_v4")
+    assert {k: body[k] for k in sig} == sig  # 관찰값이 응답에 그대로 실린다
 
 
 def test_schema_error_and_5xx_are_retried(client, fake):

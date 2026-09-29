@@ -129,10 +129,10 @@ class ResolutionSignals(BaseModel):
     reason: str
 
 
-class ResolutionResult(BaseModel):
+class ResolutionResult(ResolutionSignals):
+    """관찰값을 그대로 돌려줘서 status가 왜 나왔는지 호출하는 쪽이 확인할 수 있게 한다."""
+
     status: Literal["resolved", "unresolved", "needs_review", "escalation_needed"]
-    confidence: float
-    reason: str
 
 
 class ResolutionResponse(ResolutionResult):
@@ -159,4 +159,4 @@ async def judge_resolution(req: ResolutionRequest, llm: LLMClient) -> Resolution
         status = "resolved"
     else:
         status = "unresolved"
-    return ResolutionResult(status=status, confidence=s.confidence, reason=s.reason)
+    return ResolutionResult(**s.model_dump(), status=status)
