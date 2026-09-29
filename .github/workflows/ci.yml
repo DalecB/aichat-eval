@@ -1,0 +1,13 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check . && uv run ruff format --check .
+      # FakeLLM만 쓴다. 실제 LLM 평가(scripts/run_eval)는 키·비용 때문에 로컬에서 돌린다.
+      - run: uv run pytest -q
